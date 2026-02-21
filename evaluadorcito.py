@@ -14,6 +14,7 @@ VALOR_ERROR = 0
 
 respuestas = []
 historial = []
+categorias = {}  # {'nombre': (inicio, fin), ...}
 
 # funciones
 def crear_celdas():
@@ -65,23 +66,44 @@ def calcular():
         messagebox.showwarning("Aviso", "Ingrese el nombre del estudiante.")
         return
 
+    # Calcular puntaje total y por categoría
+    puntajes_categoria = {cat: 0 for cat in categorias}
+    preguntas_categoria = {cat: 0 for cat in categorias}
+
     for i, entry in enumerate(respuestas):
         r = entry.get().strip().lower()
+        puntos = 0
 
         if r == '':
-            pass
+            puntos = 0
         elif r == '0':
-            puntaje += VALOR_BLANCO
+            puntos = VALOR_BLANCO
         elif r == 'x':
-            puntaje += VALOR_ANULADA
+            puntos = VALOR_ANULADA
         elif r == solucionario[i]:
-            puntaje += VALOR_CORRECTO
+            puntos = VALOR_CORRECTO
         else:
-            puntaje += VALOR_ERROR
+            puntos = VALOR_ERROR
 
-    texto = f"{nombre} | Grupo: {grupo} | Puntaje: {round(puntaje,2)}"
+        puntaje += puntos
+
+        # Asignar a categoría
+        for cat, (inicio, fin) in categorias.items():
+            if inicio <= i <= fin:
+                puntajes_categoria[cat] += puntos
+                preguntas_categoria[cat] += 1
+
+    # Construir texto con puntaje general y por categoría
+    texto = f"{nombre} | Grupo: {grupo} | Puntaje General: {round(puntaje,2)}"
+    
+    # Agregar notas por categoría en base 20
+    for cat in sorted(categorias.keys()):
+        if preguntas_categoria[cat] > 0:
+            max_puntos_categoria = preguntas_categoria[cat] * VALOR_CORRECTO
+            nota_base_20 = (puntajes_categoria[cat] / max_puntos_categoria * 20) if max_puntos_categoria > 0 else 0
+            texto += f" | {cat}: {round(nota_base_20,2)}"
+    
     resultado.set(texto)
-
     historial.append(texto)
     actualizar_historial()
 
@@ -114,6 +136,50 @@ def abrir_solucionario():
             messagebox.showerror("Error", "Formato inválido.")
 
     tk.Button(ventana_sol, text="Guardar", command=guardar).pack(pady=10)
+
+def abrir_categorias():
+    ventana_cat = tk.Toplevel(ventana)
+    ventana_cat.title("Configurar Categorías")
+
+    tk.Label(ventana_cat, text="Ingrese las categorías con su rango de preguntas:").pack(pady=5)
+    tk.Label(ventana_cat, text="Formato: Nombre1 1-20, Nombre2 21-40", font=("Arial", 9, "italic")).pack(pady=2)
+
+    texto = tk.Text(ventana_cat, height=6, width=60)
+    texto.pack()
+    
+    # Mostrar categorías 
+    cat_text = ", ".join([f"{cat} {inicio+1}-{fin+1}" for cat, (inicio, fin) in categorias.items()])
+    texto.insert("1.0", cat_text)
+
+    def guardar():
+        global categorias
+        data = texto.get("1.0", "end").strip()
+        try:
+            categorias = {}
+            if data:
+                items = data.split(",")
+                for item in items:
+                    item = item.strip()
+                    if not item:
+                        continue
+                    partes = item.rsplit(" ", 1)
+                    if len(partes) != 2:
+                        raise Exception("Formato inválido")
+                    nombre = partes[0].strip()
+                    rango = partes[1].strip()
+                    if "-" not in rango:
+                        raise Exception("Debe incluir un rango")
+                    inicio, fin = rango.split("-")
+                    inicio = int(inicio.strip()) - 1  # Convertir a índice
+                    fin = int(fin.strip()) - 1
+                    if inicio < 0 or fin >= len(solucionario) or inicio > fin:
+                        raise Exception(f"Rango inválido: {rango}")
+                    categorias[nombre] = (inicio, fin)
+            ventana_cat.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", f"Formato inválido: {str(e)}")
+
+    tk.Button(ventana_cat, text="Guardar", command=guardar).pack(pady=10)
 
 def abrir_valores():
     ventana_val = tk.Toplevel(ventana)
@@ -191,9 +257,10 @@ frame_botones = tk.Frame(ventana)
 frame_botones.pack()
 
 tk.Button(frame_botones, text="Solucionario", command=abrir_solucionario).grid(row=0, column=0, padx=5)
-tk.Button(frame_botones, text="Valores", command=abrir_valores).grid(row=0, column=1, padx=5)
-tk.Button(frame_botones, text="Calcular", command=calcular).grid(row=0, column=2, padx=5)
-tk.Button(frame_botones, text="Limpiar", command=limpiar).grid(row=0, column=3, padx=5)
+tk.Button(frame_botones, text="Categorías", command=abrir_categorias).grid(row=0, column=1, padx=5)
+tk.Button(frame_botones, text="Valores", command=abrir_valores).grid(row=0, column=2, padx=5)
+tk.Button(frame_botones, text="Calcular", command=calcular).grid(row=0, column=3, padx=5)
+tk.Button(frame_botones, text="Limpiar", command=limpiar).grid(row=0, column=4, padx=5)
 
 frame_contenido = tk.Frame(ventana)
 frame_contenido.pack(fill="both", expand=True)
